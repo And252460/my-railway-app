@@ -13,20 +13,22 @@ def start_web_server():
         class Handler(BaseHTTPRequestHandler):
             def do_GET(self):
                 self.send_response(200)
-                self.send_header('Content-type', 'text/html')
+                self.send_header('Content-type', 'text/html; charset=utf-8')
                 self.end_headers()
-                self.wfile.write(b"""
-                    <html>
-                    <head><title>Teto Mario</title></head>
-                    <body>
-                        <h1>🎮 Teto Mario is running!</h1>
-                        <p>Game is running in headless mode on the server.</p>
-                        <p>Check logs for game output.</p>
-                        <hr>
-                        <p><small>Powered by Pygame on Railway</small></p>
-                    </body>
-                    </html>
-                """)
+                # Используем обычную строку и кодируем в UTF-8
+                html = """
+                <html>
+                <head><title>Teto Mario</title></head>
+                <body>
+                    <h1>🎮 Teto Mario is running!</h1>
+                    <p>Game is running in headless mode on the server.</p>
+                    <p>Check logs for game output.</p>
+                    <hr>
+                    <p><small>Powered by Pygame on Railway</small></p>
+                </body>
+                </html>
+                """
+                self.wfile.write(html.encode('utf-8'))
         
         port = int(os.environ.get('PORT', 8080))
         server = HTTPServer(('0.0.0.0', port), Handler)
@@ -127,7 +129,7 @@ invincible = False
 invincible_timer = 0
 cam_x = 0
 
-# ===== УРОВНИ (как были) =====
+# ===== УРОВНИ =====
 levels = {
     1: {
         "platforms": [(0, 400, 1200, 40), (300, 300, 150, 20), (600, 200, 150, 20), (900, 300, 150, 20)],
