@@ -1,1 +1,1 @@
-worker: xvfb-run -a python game.py
+worker: python game.py
