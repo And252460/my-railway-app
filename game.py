@@ -1,38 +1,119 @@
 import pygame
 import sys
 import os
+import threading
+import time
 
+# ===== ВЕБ-СЕРВЕР ДЛЯ RAILWAY =====
+def start_web_server():
+    """Минимальный веб-сервер, чтобы Railway не убивал процесс"""
+    try:
+        from http.server import HTTPServer, BaseHTTPRequestHandler
+        
+        class Handler(BaseHTTPRequestHandler):
+            def do_GET(self):
+                self.send_response(200)
+                self.send_header('Content-type', 'text/html')
+                self.end_headers()
+                self.wfile.write(b"""
+                    <html>
+                    <head><title>Teto Mario</title></head>
+                    <body>
+                        <h1>🎮 Teto Mario is running!</h1>
+                        <p>Game is running in headless mode on the server.</p>
+                        <p>Check logs for game output.</p>
+                        <hr>
+                        <p><small>Powered by Pygame on Railway</small></p>
+                    </body>
+                    </html>
+                """)
+        
+        port = int(os.environ.get('PORT', 8080))
+        server = HTTPServer(('0.0.0.0', port), Handler)
+        print(f"🌐 Web server running on port {port}")
+        server.serve_forever()
+    except Exception as e:
+        print(f"⚠️ Web server error: {e}")
+
+# Запускаем веб-сервер в отдельном потоке
+web_thread = threading.Thread(target=start_web_server, daemon=True)
+web_thread.start()
+print("✅ Web server thread started")
+
+# ===== НАСТРОЙКИ ДЛЯ SERVER =====
 def resource_path(relative_path):
-    """Получить путь к файлу, корректно работающий в скомпилированном .exe"""
     try:
         base_path = sys._MEIPASS
     except Exception:
         base_path = os.path.abspath(".")
     return os.path.join(base_path, relative_path)
 
+# Отключаем звук и графику на сервере
+os.environ['SDL_AUDIODRIVER'] = 'dummy'
+os.environ['SDL_VIDEODRIVER'] = 'dummy'
+
 pygame.init()
-W, H = 800, 450
-screen = pygame.display.set_mode((W, H))
-pygame.display.set_caption("Teto Mario")
+
+# Создаем виртуальный экран
+try:
+    W, H = 800, 450
+    screen = pygame.display.set_mode((W, H))
+    pygame.display.set_caption("Teto Mario")
+    HAS_DISPLAY = True
+except pygame.error:
+    print("🖥️ Running in headless mode (no display)")
+    W, H = 800, 450
+    screen = pygame.Surface((W, H))
+    HAS_DISPLAY = False
+
 clock = pygame.time.Clock()
 
-pygame.mixer.init()
-pygame.mixer.music.load(resource_path("kurymdik.mp3"))
-pygame.mixer.music.set_volume(1.0)
-pygame.mixer.music.play(-1)
+# ===== ЗВУК =====
+try:
+    pygame.mixer.init()
+    pygame.mixer.music.load(resource_path("kurymdik.mp3"))
+    pygame.mixer.music.set_volume(1.0)
+    pygame.mixer.music.play(-1)
+    SOUND_AVAILABLE = True
+    print("🔊 Sound initialized")
+except Exception as e:
+    print(f"🔇 Sound not available: {e}")
+    SOUND_AVAILABLE = False
 
-player_img = pygame.image.load(resource_path("teto.png"))
-player_img = pygame.transform.scale(player_img, (64, 64))
+# ===== ЗАГРУЗКА ИЗОБРАЖЕНИЙ (с заглушками) =====
+try:
+    player_img = pygame.image.load(resource_path("teto.png"))
+    player_img = pygame.transform.scale(player_img, (64, 64))
+except:
+    print("⚠️ Player image not found, using placeholder")
+    player_img = pygame.Surface((64, 64))
+    player_img.fill((255, 0, 0))
 
-enemy_img = pygame.image.load(resource_path("miku.png"))
-enemy_img = pygame.transform.scale(enemy_img, (64, 64))
+try:
+    enemy_img = pygame.image.load(resource_path("miku.png"))
+    enemy_img = pygame.transform.scale(enemy_img, (64, 64))
+except:
+    print("⚠️ Enemy image not found, using placeholder")
+    enemy_img = pygame.Surface((64, 64))
+    enemy_img.fill((0, 0, 255))
 
-bg_img = pygame.image.load(resource_path("bg.jpg"))
-bg_img = pygame.transform.scale(bg_img, (W, H))
+try:
+    bg_img = pygame.image.load(resource_path("bg.jpg"))
+    bg_img = pygame.transform.scale(bg_img, (W, H))
+except:
+    print("⚠️ Background image not found, using placeholder")
+    bg_img = pygame.Surface((W, H))
+    bg_img.fill((100, 100, 150))
 
-grass_img = pygame.image.load(resource_path("grass.jpg"))
-grass_img = pygame.transform.scale(grass_img, (W, H))
+try:
+    grass_img = pygame.image.load(resource_path("grass.jpg"))
+    grass_img = pygame.transform.scale(grass_img, (W, H))
+except:
+    print("⚠️ Grass image not found, using placeholder")
+    grass_img = pygame.Surface((W, H))
+    grass_img.fill((34, 139, 34))
 
+# ===== ИГРОВЫЕ ПЕРЕМЕННЫЕ =====
 p_w, p_h = 64, 64
 p_x, p_y = 30, 300
 speed = 5
@@ -44,10 +125,9 @@ score = 0
 current_level = 1
 invincible = False
 invincible_timer = 0
-
 cam_x = 0
 
-# 5 УРОВНЕЙ
+# ===== УРОВНИ (как были) =====
 levels = {
     1: {
         "platforms": [(0, 400, 1200, 40), (300, 300, 150, 20), (600, 200, 150, 20), (900, 300, 150, 20)],
@@ -129,6 +209,9 @@ MENU, PLAYING, GAME_OVER = 0, 1, 2
 state = MENU
 menu_start_time = pygame.time.get_ticks()
 
+print("🎮 Teto Mario starting on Railway!")
+print(f"🌐 Web interface available at port {os.environ.get('PORT', 8080)}")
+
 running = True
 while running:
     for e in pygame.event.get():
@@ -151,6 +234,7 @@ while running:
         if pygame.time.get_ticks() - menu_start_time > 3000:
             state = PLAYING
             reset_player()
+            print("🎯 Game started!")
 
     if state == PLAYING:
         keys = pygame.key.get_pressed()
@@ -185,9 +269,11 @@ while running:
         if p_y > 600:
             if not invincible:
                 lives -= 1
+                print(f"💀 Died! Lives remaining: {lives}")
                 reset_player()
                 if lives <= 0:
                     state = GAME_OVER
+                    print("💀 GAME OVER")
 
         if invincible and pygame.time.get_ticks() - invincible_timer > 1000:
             invincible = False
@@ -200,26 +286,36 @@ while running:
                 if vy > 0 and player_rect.bottom - vy <= enemy["rect"].top + 10:
                     enemies.remove(enemy)
                     score += 100
+                    print(f"⚔️ Enemy defeated! Score: {score}")
                 else:
                     if not invincible:
                         lives -= 1
+                        print(f"💀 Hit by enemy! Lives remaining: {lives}")
                         reset_player()
                         if lives <= 0:
                             state = GAME_OVER
+                            print("💀 GAME OVER")
 
         for coin in coins[:]:
             if player_rect.colliderect(coin):
                 coins.remove(coin)
                 score += 50
+                print(f"🪙 Coin collected! Score: {score}")
 
         if player_rect.colliderect(finish):
             if current_level < 5:
                 current_level += 1
                 lives = 3
+                print(f"🎯 Level {current_level-1} complete! Moving to level {current_level}")
                 load_level(current_level)
                 reset_player()
             else:
                 state = GAME_OVER
+                print("🎉 YOU WIN! All levels complete!")
+
+        # Логирование каждые 5 секунд
+        if not HAS_DISPLAY and pygame.time.get_ticks() % 5000 < 50:
+            print(f"📊 Score: {score} | Lives: {lives} | Level: {current_level}/5 | Enemies: {len(enemies)} | Coins: {len(coins)}")
 
         cam_x = p_x - W // 2
         if cam_x < 0:
@@ -227,57 +323,60 @@ while running:
         if cam_x > level_width - W:
             cam_x = level_width - W
 
-    screen.blit(bg_img, (0, 0))
-    screen.blit(grass_img, (0, 0))
+    # Рендеринг (если есть дисплей)
+    if HAS_DISPLAY:
+        screen.blit(bg_img, (0, 0))
+        screen.blit(grass_img, (0, 0))
 
-    if state == MENU:
-        title = font.render("TETO MARIO", True, (255, 255, 255))
-        screen.blit(title, (W//2 - title.get_width()//2, 150))
-        sub = font_small.render("Press ENTER or wait 3 seconds", True, (255, 255, 200))
-        screen.blit(sub, (W//2 - sub.get_width()//2, 220))
-        timer_text = font_small.render(f"Starting in {max(0, 3 - (pygame.time.get_ticks() - menu_start_time)//1000)}s", True, (255, 255, 200))
-        screen.blit(timer_text, (W//2 - timer_text.get_width()//2, 270))
-        
-    elif state == PLAYING:
-        for plat in platforms:
-            x = plat[0] - cam_x
-            if -plat[2] < x < W + 50:
-                pygame.draw.rect(screen, (139, 69, 19), (x, plat[1], plat[2], plat[3]))
+        if state == MENU:
+            title = font.render("TETO MARIO", True, (255, 255, 255))
+            screen.blit(title, (W//2 - title.get_width()//2, 150))
+            sub = font_small.render("Press ENTER or wait 3 seconds", True, (255, 255, 200))
+            screen.blit(sub, (W//2 - sub.get_width()//2, 220))
+            timer_text = font_small.render(f"Starting in {max(0, 3 - (pygame.time.get_ticks() - menu_start_time)//1000)}s", True, (255, 255, 200))
+            screen.blit(timer_text, (W//2 - timer_text.get_width()//2, 270))
+            
+        elif state == PLAYING:
+            for plat in platforms:
+                x = plat[0] - cam_x
+                if -plat[2] < x < W + 50:
+                    pygame.draw.rect(screen, (139, 69, 19), (x, plat[1], plat[2], plat[3]))
 
-        for enemy in enemies:
-            x = enemy["rect"].x - cam_x
-            if -50 < x < W + 50:
-                screen.blit(enemy_img, (x, enemy["rect"].y))
+            for enemy in enemies:
+                x = enemy["rect"].x - cam_x
+                if -50 < x < W + 50:
+                    screen.blit(enemy_img, (x, enemy["rect"].y))
 
-        for coin in coins:
-            x = coin.x - cam_x
-            if -50 < x < W + 50:
-                pygame.draw.circle(screen, (255, 215, 0), (x + 8, coin.y + 8), 8)
+            for coin in coins:
+                x = coin.x - cam_x
+                if -50 < x < W + 50:
+                    pygame.draw.circle(screen, (255, 215, 0), (x + 8, coin.y + 8), 8)
 
-        fx = finish.x - cam_x
-        if -50 < fx < W + 50:
-            pygame.draw.rect(screen, (0, 255, 0), (fx, finish.y, finish.w, finish.h))
-            pygame.draw.rect(screen, (0, 200, 0), (fx + 5, finish.y + 10, finish.w - 10, finish.h - 20))
+            fx = finish.x - cam_x
+            if -50 < fx < W + 50:
+                pygame.draw.rect(screen, (0, 255, 0), (fx, finish.y, finish.w, finish.h))
+                pygame.draw.rect(screen, (0, 200, 0), (fx + 5, finish.y + 10, finish.w - 10, finish.h - 20))
 
-        screen.blit(player_img, (p_x - cam_x, p_y))
+            screen.blit(player_img, (p_x - cam_x, p_y))
 
-        text = font_small.render(f"Score: {score}  Lives: {lives}  Level: {current_level}/5", True, (255, 255, 255))
-        screen.blit(text, (10, 10))
+            text = font_small.render(f"Score: {score}  Lives: {lives}  Level: {current_level}/5", True, (255, 255, 255))
+            screen.blit(text, (10, 10))
 
-    elif state == GAME_OVER:
-        s = pygame.Surface((W, H))
-        s.set_alpha(180)
-        s.fill((0, 0, 0))
-        screen.blit(s, (0, 0))
-        if lives <= 0:
-            go_text = font.render("GAME OVER", True, (255, 0, 0))
-        else:
-            go_text = font.render("YOU WIN!", True, (0, 255, 0))
-        screen.blit(go_text, (W//2 - go_text.get_width()//2, 150))
-        sub = font_small.render("Press ENTER to restart", True, (255, 255, 255))
-        screen.blit(sub, (W//2 - sub.get_width()//2, 220))
+        elif state == GAME_OVER:
+            s = pygame.Surface((W, H))
+            s.set_alpha(180)
+            s.fill((0, 0, 0))
+            screen.blit(s, (0, 0))
+            if lives <= 0:
+                go_text = font.render("GAME OVER", True, (255, 0, 0))
+            else:
+                go_text = font.render("YOU WIN!", True, (0, 255, 0))
+            screen.blit(go_text, (W//2 - go_text.get_width()//2, 150))
+            sub = font_small.render("Press ENTER to restart", True, (255, 255, 255))
+            screen.blit(sub, (W//2 - sub.get_width()//2, 220))
 
-    pygame.display.flip()
+        pygame.display.flip()
+    
     clock.tick(60)
 
 pygame.quit()
