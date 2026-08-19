@@ -1,1 +1,1 @@
-worker: python game.py
+worker: bash startup.sh
